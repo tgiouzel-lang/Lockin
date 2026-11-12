@@ -5,9 +5,13 @@ Add tasks for the day, check them off, rate your day, and get a day score.
 """
 from dataclasses import dataclass
 from drafter import *
+from bakery import assert_equal
 
-# "from drafter import *" lets us write Button(...) instead of drafter.Button(...).
-# str.strip() removes spaces from both ends and str.lower() makes text lowercase.
+hide_debug_information()
+set_website_title("Lock IN Tracker")
+set_website_framed(False)
+
+
 set_site_information(
     author="Tyler Giouzelis",
     description="Lock In: a daily task tracker with a day score.",
@@ -34,7 +38,7 @@ class State:
     message: str
 
 
-# --------------------------- helper functions ---------------------------
+
 def count_done(goals: list[Goal]) -> int:
     """Count how many goals are marked done."""
     total = 0
