@@ -5,8 +5,9 @@ Add tasks for the day, check them off, rate your day (1-10), and get a day score
 """
 from dataclasses import dataclass
 import random
+from typing import Any
 from drafter import *
-from bakery import assert_equal
+from bakery import assert_equal as bakery_assert_equal
 
 hide_debug_information()
 set_website_title("Lock IN Tracker")
@@ -181,7 +182,7 @@ def index(state: State) -> Page:
         greeting = "Welcome back, " + state.user_name + ". Time to lock in."
     quote = QUOTES[state.quote_number % len(QUOTES)]
     state.quote_number = (state.quote_number + 1) % len(QUOTES)
-    content = [
+    content: list[Any] = [
         Header("LOCK IN", 1),
         greeting,
         '"' + quote + '"',
@@ -195,7 +196,7 @@ def index(state: State) -> Page:
 @route
 def profile_page(state: State) -> Page:
     """Profile page: set your name."""
-    content = [
+    content: list[Any] = [
         Header("Profile", 1),
         "Your name:",
         TextBox("new_name", state.user_name),
@@ -215,7 +216,7 @@ def save_profile(state: State, new_name: str) -> Page:
 @route
 def tasks_page(state: State) -> Page:
     """Tasks page: each task has its own button to mark it done or undo it."""
-    content = [Header("Tasks", 1)]
+    content: list[Any] = [Header("Tasks", 1)]
     if state.message != "":
         content.append(state.message)
         state.message = ""
@@ -284,7 +285,7 @@ def add_goal(state: State, goal_name: str) -> Page:
 @route
 def checkin_page(state: State) -> Page:
     """Check-in page: rate the day, optionally mark a task, and write a note."""
-    content = [Header("Check-in", 1)]
+    content: list[Any] = [Header("Check-in", 1)]
     if state.day_rating == NOT_RATED:
         default_rating = "5"
     else:
@@ -325,7 +326,7 @@ def save_checkin(state: State, task_name: str, is_done: bool,
 @route
 def progress_page(state: State) -> Page:
     """Progress page: percent, day score, status, explanation, and the note."""
-    content = [Header("Progress", 1)]
+    content: list[Any] = [Header("Progress", 1)]
     if len(state.goals) == 0:
         content.append("No tasks yet, so there is no progress to show.")
     else:
@@ -351,114 +352,114 @@ def make_state() -> State:
 def test_helpers() -> None:
     """Unit tests for the helper functions."""
     goals = make_state().goals
-    assert_equal(count_done(goals), 1)
-    assert_equal(count_done([]), 0)
-    assert_equal(percent_done(goals), 50)
-    assert_equal(percent_done([]), 0)
-    assert_equal(day_score(50, 0), 50)
-    assert_equal(day_score(50, 8), 65)
-    assert_equal(day_score(100, 10), 100)
-    assert_equal(status_label(80), "Locked in")
-    assert_equal(status_label(50), "On track")
-    assert_equal(status_label(49), "Need a push")
-    assert_equal(goal_exists(goals, "read"), True)
-    assert_equal(goal_exists(goals, "Swim"), False)
-    assert_equal(goal_line(goals[0]), "[x] Read")
-    assert_equal(goal_line(goals[1]), "[ ] Run")
-    assert_equal(goal_names(goals), ["Read", "Run"])
-    assert_equal(goal_options(goals), ["[x] Read", "[ ] Run"])
-    assert_equal(name_from_option("[x] Read"), "Read")
-    assert_equal(name_from_option("[ ] Run"), "Run")
-    assert_equal(len(QUOTES), 15)
+    bakery_assert_equal(count_done(goals), 1)
+    bakery_assert_equal(count_done([]), 0)
+    bakery_assert_equal(percent_done(goals), 50)
+    bakery_assert_equal(percent_done([]), 0)
+    bakery_assert_equal(day_score(50, 0), 50)
+    bakery_assert_equal(day_score(50, 8), 65)
+    bakery_assert_equal(day_score(100, 10), 100)
+    bakery_assert_equal(status_label(80), "Locked in")
+    bakery_assert_equal(status_label(50), "On track")
+    bakery_assert_equal(status_label(49), "Need a push")
+    bakery_assert_equal(goal_exists(goals, "read"), True)
+    bakery_assert_equal(goal_exists(goals, "Swim"), False)
+    bakery_assert_equal(goal_line(goals[0]), "[x] Read")
+    bakery_assert_equal(goal_line(goals[1]), "[ ] Run")
+    bakery_assert_equal(goal_names(goals), ["Read", "Run"])
+    bakery_assert_equal(goal_options(goals), ["[x] Read", "[ ] Run"])
+    bakery_assert_equal(name_from_option("[x] Read"), "Read")
+    bakery_assert_equal(name_from_option("[ ] Run"), "Run")
+    bakery_assert_equal(len(QUOTES), 15)
 
 
 def test_page_routes() -> None:
     """Unit tests for the routes that only show a page."""
     state = make_state()
-    assert_equal(index(state).state, state)
-    assert_equal(profile_page(state).state, state)
-    assert_equal(tasks_page(state).state, state)
-    assert_equal(checkin_page(state).state, state)
-    assert_equal(progress_page(state).state, state)
+    bakery_assert_equal(index(state).state, state)
+    bakery_assert_equal(profile_page(state).state, state)
+    bakery_assert_equal(tasks_page(state).state, state)
+    bakery_assert_equal(checkin_page(state).state, state)
+    bakery_assert_equal(progress_page(state).state, state)
     empty = State([], "", 0, "", "", 0, "")
-    assert_equal(len(checkin_page(empty).state.goals), 0)
-    assert_equal(len(progress_page(empty).state.goals), 0)
+    bakery_assert_equal(len(checkin_page(empty).state.goals), 0)
+    bakery_assert_equal(len(progress_page(empty).state.goals), 0)
 
 
 def test_quotes() -> None:
     """Unit test: the home page shows a quote and moves to the next one."""
     state = make_state()
     index(state)
-    assert_equal(state.quote_number, 1)
+    bakery_assert_equal(state.quote_number, 1)
     state.quote_number = len(QUOTES) - 1
     index(state)
-    assert_equal(state.quote_number, 0)
+    bakery_assert_equal(state.quote_number, 0)
 
 
 def test_save_profile() -> None:
     """Unit test for save_profile."""
     state = make_state()
     save_profile(state, "  Sam ")
-    assert_equal(state.user_name, "Sam")
+    bakery_assert_equal(state.user_name, "Sam")
 
 
 def test_add_goal() -> None:
     """Unit tests for add_goal, including blank and repeated names."""
     state = make_state()
     add_goal(state, "Study")
-    assert_equal(len(state.goals), 3)
+    bakery_assert_equal(len(state.goals), 3)
     add_goal(state, "   ")
-    assert_equal(len(state.goals), 3)
+    bakery_assert_equal(len(state.goals), 3)
     add_goal(state, "study")
-    assert_equal(len(state.goals), 3)
+    bakery_assert_equal(len(state.goals), 3)
 
 
 def test_toggle_goal() -> None:
     """Unit tests for toggle_goal: flips done both ways, ignores unknown names."""
     state = make_state()
     toggle_goal(state, "Run")
-    assert_equal(state.goals[1].done, True)
+    bakery_assert_equal(state.goals[1].done, True)
     toggle_goal(state, "Run")
-    assert_equal(state.goals[1].done, False)
+    bakery_assert_equal(state.goals[1].done, False)
     toggle_goal(state, "Nope")
-    assert_equal(count_done(state.goals), 1)
+    bakery_assert_equal(count_done(state.goals), 1)
 
 
 def test_save_checkin() -> None:
     """Unit tests for save_checkin, with and without a chosen task."""
     state = make_state()
     save_checkin(state, "[ ] Run", True, "4", "Good day")
-    assert_equal(state.goals[1].done, True)
-    assert_equal(state.day_rating, 4)
-    assert_equal(state.goals[1].note, "Good day")
-    assert_equal(state.daily_note, "")
+    bakery_assert_equal(state.goals[1].done, True)
+    bakery_assert_equal(state.day_rating, 4)
+    bakery_assert_equal(state.goals[1].note, "Good day")
+    bakery_assert_equal(state.daily_note, "")
     # rating only, no task chosen: tasks stay the same
     state2 = make_state()
     save_checkin(state2, NO_TASK, True, "9", "")
-    assert_equal(state2.day_rating, 9)
-    assert_equal(count_done(state2.goals), 1)
+    bakery_assert_equal(state2.day_rating, 9)
+    bakery_assert_equal(count_done(state2.goals), 1)
     # no task chosen but a note: it becomes the day note
     save_checkin(state2, NO_TASK, True, "9", "Long day")
-    assert_equal(state2.daily_note, "Long day")
+    bakery_assert_equal(state2.daily_note, "Long day")
     # each task keeps its own note; a blank note does not erase an old one
     state3 = make_state()
     save_checkin(state3, "[x] Read", True, "5", "Chapter 3")
     save_checkin(state3, "[ ] Run", False, "5", "3 miles")
-    assert_equal(state3.goals[0].note, "Chapter 3")
-    assert_equal(state3.goals[1].note, "3 miles")
+    bakery_assert_equal(state3.goals[0].note, "Chapter 3")
+    bakery_assert_equal(state3.goals[1].note, "3 miles")
     save_checkin(state3, "[x] Read", True, "5", "   ")
-    assert_equal(state3.goals[0].note, "Chapter 3")
+    bakery_assert_equal(state3.goals[0].note, "Chapter 3")
 
 
 def test_toggle_note() -> None:
     """Unit tests for toggle_note: open a task's note, switch, then close it."""
     state = make_state()
     toggle_note(state, "Run")
-    assert_equal(state.open_task, "Run")
+    bakery_assert_equal(state.open_task, "Run")
     toggle_note(state, "Read")
-    assert_equal(state.open_task, "Read")
+    bakery_assert_equal(state.open_task, "Read")
     toggle_note(state, "Read")
-    assert_equal(state.open_task, "")
+    bakery_assert_equal(state.open_task, "")
 
 
 def run_tests() -> None:
