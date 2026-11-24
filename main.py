@@ -1,9 +1,10 @@
 """
 Lock In - a daily task tracker built with Drafter.
 
-Add tasks for the day, check them off, rate your day, and get a day score.
+Add tasks for the day, check them off, rate your day (1-10), and get a day score.
 """
 from dataclasses import dataclass
+import random
 from drafter import *
 from bakery import assert_equal
 
@@ -20,13 +21,58 @@ set_site_information(
     links=["https://github.com/"],
 )
 
-RATINGS = ["1", "2", "3", "4", "5"]
+# ------------------------------- theme ----------------------------------
+# A simple dark "lock in" look: black background, light text, neon green accents.
+# "!important" makes sure these win over Drafter's built-in styles.
+add_website_css("html, body", "background-color: #0d0d0d !important; "
+                              "color: #f2f2f2 !important; "
+                              "font-family: Arial, sans-serif;")
+add_website_css("div, p, span, label, li, td, th, pre",
+                "background-color: transparent !important; "
+                "color: #f2f2f2 !important;")
+add_website_css("h1, h2, h3, h4", "color: #39ff14 !important; "
+                                  "letter-spacing: 2px; "
+                                  "text-transform: uppercase;")
+add_website_css("button, input[type=submit]",
+                "background-color: #39ff14 !important; "
+                "color: #0d0d0d !important; font-weight: bold; "
+                "border: none; border-radius: 4px; padding: 6px 14px; "
+                "margin: 3px; cursor: pointer;")
+add_website_css("input, textarea, select",
+                "background-color: #1c1c1c !important; "
+                "color: #f2f2f2 !important; "
+                "border: 1px solid #39ff14; border-radius: 4px; padding: 4px;")
+add_website_css("hr", "border-color: #39ff14;")
+
+RATINGS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+NOT_RATED = 0
+NO_TASK = "(No task - just rate my day)"
+QUOTES = [
+    "Discipline is choosing what you want most over what you want now.",
+    "Small steps every day beat big plans someday.",
+    "You do not have to feel ready. You just have to start.",
+    "Lock in now, rest later.",
+    "Your future self is watching what you do today.",
+    "Done is better than perfect.",
+    "Motivation gets you going. Habit keeps you going.",
+    "One finished task is worth ten good intentions.",
+    "Focus on the next right thing, not everything at once.",
+    "Progress is progress, no matter how small.",
+    "Show up even when it is boring. Especially when it is boring.",
+    "Hard work is quiet. Results are loud.",
+    "Today's effort is tomorrow's momentum.",
+    "Make your goals so clear that excuses have nowhere to hide.",
+    "Win the day, and the weeks will take care of themselves.",
+]
+SCORE_EXPLANATION = ("Day score = half your tasks done (%) + half your "
+                     "day rating (1-10 scaled to 100).")
 
 
 @dataclass
 class Goal:
     name: str
     done: bool
+    note: str
 
 
 @dataclass
@@ -36,6 +82,8 @@ class State:
     day_rating: int
     daily_note: str
     message: str
+    quote_number: int
+    open_task: str
 
 
 
@@ -56,13 +104,13 @@ def percent_done(goals: list[Goal]) -> int:
 
 
 def day_score(percent: int, rating: int) -> int:
-    """Combine percent done (0-100) and the day rating (1-5) into a score.
+    """Combine percent done (0-100) and the day rating (1-10) into a score.
 
-    A rating of 0 means the user has not rated the day yet.
+    A rating of 0 (NOT_RATED) means the user has not rated the day yet.
     """
-    if rating == 0:
+    if rating == NOT_RATED:
         return percent
-    return round((percent + rating * 20) / 2)
+    return round((percent + rating * 10) / 2)
 
 
 def status_label(score: int) -> str:
@@ -98,6 +146,19 @@ def goal_names(goals: list[Goal]) -> list[str]:
     return names
 
 
+def goal_options(goals: list[Goal]) -> list[str]:
+    """Return each goal as '[x] name' or '[ ] name' (for the check-in SelectBox)."""
+    options = []
+    for goal in goals:
+        options.append(goal_line(goal))
+    return options
+
+
+def name_from_option(option: str) -> str:
+    """Remove the 4-character '[x] ' or '[ ] ' marker from a goal_line string."""
+    return option[4:]
+
+
 def nav_buttons() -> list:
     """Navigation buttons shown at the bottom of every page."""
     return [
@@ -118,9 +179,12 @@ def index(state: State) -> Page:
         greeting = "Welcome to Lock In! Set your name on the Profile page."
     else:
         greeting = "Welcome back, " + state.user_name + ". Time to lock in."
+    quote = QUOTES[state.quote_number % len(QUOTES)]
+    state.quote_number = (state.quote_number + 1) % len(QUOTES)
     content = [
-        "Lock In",
+        Header("LOCK IN", 1),
         greeting,
+        '"' + quote + '"',
         str(count_done(state.goals)) + " of " + str(len(state.goals)) + " tasks done",
         ProgressBar(percent_done(state.goals) / 100),
     ]
@@ -132,7 +196,7 @@ def index(state: State) -> Page:
 def profile_page(state: State) -> Page:
     """Profile page: set your name."""
     content = [
-        "Profile",
+        Header("Profile", 1),
         "Your name:",
         TextBox("new_name", state.user_name),
         Button("Save profile", save_profile),
@@ -150,21 +214,57 @@ def save_profile(state: State, new_name: str) -> Page:
 
 @route
 def tasks_page(state: State) -> Page:
-    """Tasks page: shows every task and a form to add a new one."""
-    content = ["Tasks"]
+    """Tasks page: each task has its own button to mark it done or undo it."""
+    content = [Header("Tasks", 1)]
     if state.message != "":
         content.append(state.message)
         state.message = ""
     if len(state.goals) == 0:
         content.append("No tasks yet. Add your first one below.")
+    else:
+        content.append("Tap a task to see its note. Use Finish / Undo to change its status.")
     for goal in state.goals:
-        content.append(goal_line(goal))
+        label = goal_line(goal)
+        if goal.note != "":
+            label = label + "  (has note)"
+        content.append(Button(label, toggle_note,
+                              [Argument("note_name", goal.name)]))
+        if goal.done:
+            content.append(Button("Undo", toggle_goal,
+                                  [Argument("toggle_name", goal.name)]))
+        else:
+            content.append(Button("Finish", toggle_goal,
+                                  [Argument("toggle_name", goal.name)]))
+        if state.open_task == goal.name:
+            if goal.note == "":
+                content.append("No note yet. Add one on the Check-in page.")
+            else:
+                content.append("Note: " + goal.note)
     content.append(HorizontalRule())
     content.append("New task:")
     content.append(TextBox("goal_name", ""))
     content.append(Button("Add task", add_goal))
     content.extend(nav_buttons())
     return Page(state, content)
+
+
+@route
+def toggle_note(state: State, note_name: str) -> Page:
+    """Open the note under a task, or close it if it is already open."""
+    if state.open_task == note_name:
+        state.open_task = ""
+    else:
+        state.open_task = note_name
+    return tasks_page(state)
+
+
+@route
+def toggle_goal(state: State, toggle_name: str) -> Page:
+    """Flip one goal between done and not done, then show the tasks again."""
+    for goal in state.goals:
+        if goal.name == toggle_name:
+            goal.done = not goal.done
+    return tasks_page(state)
 
 
 @route
@@ -176,27 +276,29 @@ def add_goal(state: State, goal_name: str) -> Page:
     elif goal_exists(state.goals, name):
         state.message = "You already have a task called '" + name + "'."
     else:
-        state.goals.append(Goal(name, False))
+        state.goals.append(Goal(name, False, ""))
         state.message = "Added '" + name + "'."
     return tasks_page(state)
 
 
 @route
 def checkin_page(state: State) -> Page:
-    """Check-in page: mark a task, rate the day, and write a note."""
-    content = ["Check-in"]
-    if len(state.goals) == 0:
-        content.append("No tasks yet. Add a task first, then come back.")
+    """Check-in page: rate the day, optionally mark a task, and write a note."""
+    content = [Header("Check-in", 1)]
+    if state.day_rating == NOT_RATED:
+        default_rating = "5"
     else:
-        content.append("Which task?")
-        content.append(SelectBox("task_name", goal_names(state.goals)))
-        content.append(CheckBox("is_done", True))
-        content.append("Mark as done")
-        content.append("How is your day going? (1 = rough, 5 = great)")
-        content.append(SelectBox("rating", RATINGS, "3"))
-        content.append("Note for the day:")
-        content.append(TextArea("note", state.daily_note))
-        content.append(Button("Save check-in", save_checkin))
+        default_rating = str(state.day_rating)
+    content.append("Step 1: How is your day going? (1 = rough, 10 = great)")
+    content.append(SelectBox("rating", RATINGS, default_rating))
+    content.append("Step 2 (optional): Update a task ([x] = done, [ ] = not done)")
+    content.append(SelectBox("task_name", [NO_TASK] + goal_options(state.goals),
+                             NO_TASK))
+    content.append("Mark the chosen task as done (uncheck it to mark it not done):")
+    content.append(CheckBox("is_done", True))
+    content.append("Step 3 (optional): Note for the chosen task (or for the day if no task is chosen)")
+    content.append(TextArea("note", ""))
+    content.append(Button("Save check-in", save_checkin))
     content.extend(nav_buttons())
     return Page(state, content)
 
@@ -204,19 +306,26 @@ def checkin_page(state: State) -> Page:
 @route
 def save_checkin(state: State, task_name: str, is_done: bool,
                  rating: str, note: str) -> Page:
-    """Update the chosen goal, the day rating, and the note, then show progress."""
-    for goal in state.goals:
-        if goal.name == task_name:
-            goal.done = is_done
+    """Save the rating, then save the note on the chosen task (or the day)."""
+    clean_note = note.strip()
+    if task_name == NO_TASK:
+        if clean_note != "":
+            state.daily_note = clean_note
+    else:
+        chosen_name = name_from_option(task_name)
+        for goal in state.goals:
+            if goal.name == chosen_name:
+                goal.done = is_done
+                if clean_note != "":
+                    goal.note = clean_note
     state.day_rating = int(rating)
-    state.daily_note = note
     return progress_page(state)
 
 
 @route
 def progress_page(state: State) -> Page:
-    """Progress page: percent, day score, status, and the note."""
-    content = ["Progress"]
+    """Progress page: percent, day score, status, explanation, and the note."""
+    content = [Header("Progress", 1)]
     if len(state.goals) == 0:
         content.append("No tasks yet, so there is no progress to show.")
     else:
@@ -225,6 +334,7 @@ def progress_page(state: State) -> Page:
         content.append(str(percent) + "% of tasks done")
         content.append(ProgressBar(percent / 100))
         content.append("Day score: " + str(score) + " / 100")
+        content.append(SCORE_EXPLANATION)
         content.append("Status: " + status_label(score))
         if state.daily_note != "":
             content.append("Note: " + state.daily_note)
@@ -235,7 +345,7 @@ def progress_page(state: State) -> Page:
 # ------------------------------ unit tests ------------------------------
 def make_state() -> State:
     """Build a fresh State with two goals for the tests."""
-    return State([Goal("Read", True), Goal("Run", False)], "Tyler", 0, "", "")
+    return State([Goal("Read", True, ""), Goal("Run", False, "")], "Tyler", 0, "", "", 0, "")
 
 
 def test_helpers() -> None:
@@ -246,7 +356,8 @@ def test_helpers() -> None:
     assert_equal(percent_done(goals), 50)
     assert_equal(percent_done([]), 0)
     assert_equal(day_score(50, 0), 50)
-    assert_equal(day_score(50, 4), 65)
+    assert_equal(day_score(50, 8), 65)
+    assert_equal(day_score(100, 10), 100)
     assert_equal(status_label(80), "Locked in")
     assert_equal(status_label(50), "On track")
     assert_equal(status_label(49), "Need a push")
@@ -255,6 +366,10 @@ def test_helpers() -> None:
     assert_equal(goal_line(goals[0]), "[x] Read")
     assert_equal(goal_line(goals[1]), "[ ] Run")
     assert_equal(goal_names(goals), ["Read", "Run"])
+    assert_equal(goal_options(goals), ["[x] Read", "[ ] Run"])
+    assert_equal(name_from_option("[x] Read"), "Read")
+    assert_equal(name_from_option("[ ] Run"), "Run")
+    assert_equal(len(QUOTES), 15)
 
 
 def test_page_routes() -> None:
@@ -265,9 +380,19 @@ def test_page_routes() -> None:
     assert_equal(tasks_page(state).state, state)
     assert_equal(checkin_page(state).state, state)
     assert_equal(progress_page(state).state, state)
-    empty = State([], "", 0, "", "")
+    empty = State([], "", 0, "", "", 0, "")
     assert_equal(len(checkin_page(empty).state.goals), 0)
     assert_equal(len(progress_page(empty).state.goals), 0)
+
+
+def test_quotes() -> None:
+    """Unit test: the home page shows a quote and moves to the next one."""
+    state = make_state()
+    index(state)
+    assert_equal(state.quote_number, 1)
+    state.quote_number = len(QUOTES) - 1
+    index(state)
+    assert_equal(state.quote_number, 0)
 
 
 def test_save_profile() -> None:
@@ -288,24 +413,66 @@ def test_add_goal() -> None:
     assert_equal(len(state.goals), 3)
 
 
-def test_save_checkin() -> None:
-    """Unit test for save_checkin."""
+def test_toggle_goal() -> None:
+    """Unit tests for toggle_goal: flips done both ways, ignores unknown names."""
     state = make_state()
-    save_checkin(state, "Run", True, "4", "Good day")
+    toggle_goal(state, "Run")
+    assert_equal(state.goals[1].done, True)
+    toggle_goal(state, "Run")
+    assert_equal(state.goals[1].done, False)
+    toggle_goal(state, "Nope")
+    assert_equal(count_done(state.goals), 1)
+
+
+def test_save_checkin() -> None:
+    """Unit tests for save_checkin, with and without a chosen task."""
+    state = make_state()
+    save_checkin(state, "[ ] Run", True, "4", "Good day")
     assert_equal(state.goals[1].done, True)
     assert_equal(state.day_rating, 4)
-    assert_equal(state.daily_note, "Good day")
+    assert_equal(state.goals[1].note, "Good day")
+    assert_equal(state.daily_note, "")
+    # rating only, no task chosen: tasks stay the same
+    state2 = make_state()
+    save_checkin(state2, NO_TASK, True, "9", "")
+    assert_equal(state2.day_rating, 9)
+    assert_equal(count_done(state2.goals), 1)
+    # no task chosen but a note: it becomes the day note
+    save_checkin(state2, NO_TASK, True, "9", "Long day")
+    assert_equal(state2.daily_note, "Long day")
+    # each task keeps its own note; a blank note does not erase an old one
+    state3 = make_state()
+    save_checkin(state3, "[x] Read", True, "5", "Chapter 3")
+    save_checkin(state3, "[ ] Run", False, "5", "3 miles")
+    assert_equal(state3.goals[0].note, "Chapter 3")
+    assert_equal(state3.goals[1].note, "3 miles")
+    save_checkin(state3, "[x] Read", True, "5", "   ")
+    assert_equal(state3.goals[0].note, "Chapter 3")
+
+
+def test_toggle_note() -> None:
+    """Unit tests for toggle_note: open a task's note, switch, then close it."""
+    state = make_state()
+    toggle_note(state, "Run")
+    assert_equal(state.open_task, "Run")
+    toggle_note(state, "Read")
+    assert_equal(state.open_task, "Read")
+    toggle_note(state, "Read")
+    assert_equal(state.open_task, "")
 
 
 def run_tests() -> None:
     """Run every unit test."""
     test_helpers()
     test_page_routes()
+    test_quotes()
     test_save_profile()
     test_add_goal()
+    test_toggle_goal()
+    test_toggle_note()
     test_save_checkin()
 
 
 run_tests()
 
-start_server(State([], "", 0, "", ""))
+start_server(State([], "", 0, "", "", random.randrange(len(QUOTES)), ""))
