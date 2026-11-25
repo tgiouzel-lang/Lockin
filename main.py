@@ -19,7 +19,7 @@ set_site_information(
     description="Lock In: a daily task tracker with a day score.",
     sources=["Drafter documentation: https://drafter-edu.github.io/drafter/"],
     planning="Week 10 and Week 11 worksheets are in this repository.",
-    links=["https://github.com/"],
+    links=["https://tgiouzel-lang.github.io/Lockin/"],
 )
 
 # ------------------------------- theme ----------------------------------
